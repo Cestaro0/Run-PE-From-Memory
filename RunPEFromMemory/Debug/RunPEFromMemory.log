@@ -1,0 +1,3 @@
+﻿  RunPEFromMemory.cpp
+C:\Users\Chiptronic\Desktop\RunPEFromMemory\RunPEFromMemory\RunPEFromMemory.cpp(63): warning C4715: 'RunPortableExecutable': nem todos os caminhos de controle retornam um valor
+  RunPEFromMemory.vcxproj -> C:\Users\Chiptronic\Desktop\RunPEFromMemory\Debug\RunPEFromMemory.exe
