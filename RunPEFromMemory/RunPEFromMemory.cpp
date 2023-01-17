@@ -4,7 +4,6 @@
 #include <TlHelp32.h>
 #include <fstream>
 
-
 int RunPortableExecutable(void* Image)
 {
 	IMAGE_DOS_HEADER* DOSHeader = PIMAGE_DOS_HEADER(Image);
